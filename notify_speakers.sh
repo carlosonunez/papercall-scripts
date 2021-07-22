@@ -1,10 +1,22 @@
 #!/usr/bin/env bash
 # vi: set ft=bash:
 #shellcheck disable=SC1090
+set -euo pipefail
 for file in helpers/*.bash
 do
   source "$file"
 done
+
+get_template_for_state_or_fail() {
+  state="$1"
+  template_file="$(dirname "$0")/templates/$state.md"
+  _log_debug "Looking for file $template_file"
+  if ! test -e "$template_file"
+  then
+    _fail "PaperCall template not found at '$template_file'; see --help for more info."
+  fi
+  cat "$template_file"
+}
 
 #No return values are being provided here. Disabling this cop.
 #shellcheck disable=SC2155
@@ -23,19 +35,20 @@ ENVIRONMENT VARIABLES
 OPTIONS
 
   --event-name [NAME]                 The name of the event in which the talks are located.
-  --talks [TALK_1,TALK_2,...]         The names of the talks to be transitioned.
+  --talks [TALK_1|TALK_2|...]         The names of the talks to be transitioned.
                                       Use to individually message CFP authors.
+                                      The talks need to be separated by pipes ('|')
   --state [Submitted, Rejected, ...]  The state of talks whose authors need notification.
 
 NOTES
 
-  - You will need to have templates for each talk state that you'd like to send notifications for.
-    These templates will need to be located in 'templates/'
+  - You will need to have templates for each talk state that you\'d like to send notifications for.
+    These templates will need to be located in \'templates/\'
 
-    For instance, you'll need a file called 'templates/accepted.md' in order to send
+    For instance, you\'ll need a file called \'templates/accepted.md\' in order to send
     notifications to any CFPs that have been accepted.
 
-    The templates must follow PaperCall's syntax format.
+    The templates must follow PaperCall\'s syntax format.
 
   - This script will not log into Papercall for you. You will need to do it from a browser.
     Before running this script, do the following:
@@ -72,7 +85,10 @@ do
       shift
       ! _next_arg_is_arg "$1" && { talks_psv="$1"; shift; }
       ;;
-    --state) shift ! _next_arg_is_arg "$1" && { state="$1"; shift; } ;;
+    --state)
+      shift
+      ! _next_arg_is_arg "$1" && { state="$1"; shift; }
+      ;;
     *)
       usage
       >&2 echo "ERROR: Argument is invalid: $1"
@@ -85,6 +101,8 @@ _verify_required_arg_or_fail "--event" "$event_name"
 _verify_required_arg_or_fail "--state" "$state"
 _verify_required_arg_or_fail "--talks" "$talks_psv"
 
+notification_template=$(get_template_for_state_or_fail "$state")
+
 if ! validate_session_cookie
 then
   _fail "The cookie at $PAPERCALL_SESSION_COOKIE_FILE has expired or is invalid.
@@ -95,13 +113,14 @@ fi
 event_id=$(event_id_from_name "$event_name") || _fail "Event name not found: $event_name"
 if ! test -z "$talks_psv"
 then
-  talks_data=$(get_matching_talks "$event_id" "$talks_psv")
-  _log_info "$(wc -l <<< "$talks_data") talks found matching '$talks_psv'."
-  matches=$(grep -v "nomatch" <<< "$talks_data")
-  non_matches=$(grep "nomatch" <<< "$talks_data")
+  all_talks_data=$(get_matching_talks "$event_id" "$talks_psv")
+  _log_info "$(wc -l <<< "$all_talks_data") talks found matching '$talks_psv'."
+  matches=$(grep -v "nomatch" <<< "$all_talks_data" || true)
+  non_matches=$(grep "nomatch" <<< "$all_talks_data" || true)
   test -z "$non_matches" || _fail "Some talks weren't found in your search: $non_matches"
+  talks_data=$matches
 else
   talks_data=$(get_all_talks "$event_id" | grep "talk_state:$state")
 fi
 _log_info "$(wc -l <<< "$talks_data") talks found matching '$talks_psv'."
-notify_speakers "$talks_data"
+send_submission_notification "$talks_data" "$notification_template"

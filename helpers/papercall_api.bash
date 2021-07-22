@@ -2,7 +2,7 @@
 PAPERCALL_SESSION_COOKIE_FILE="${PAPERCALL_SESSION_COOKIE_FILE:-$PWD/.papercall_cookie}"
 USER_AGENT='Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0'
 
-_put() {
+_post() {
   # Papercall uses a POST to perform a PUT action against talks. They even provide
   # the actual method inside of the payload instead of using it in the request!
   # So weird.

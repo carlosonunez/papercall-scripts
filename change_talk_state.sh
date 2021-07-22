@@ -5,6 +5,21 @@ do
   source "$file"
 done
 
+change_talk_state_bulk() {
+  matching_talks="$1"
+  new_state="$(tr '[:upper:]' '[:lower:]' <<< $2)"
+  while read -r talk
+  do
+    old_state=$(get_talk_state_from_talk "$talk")
+    talk_name=$(get_talk_name_from_talk "$talk")
+    talk_path=$(get_talk_href_from_talk "$talk")
+    authenticity_token=$(get_csrf_token_from_talk "$talk")
+    payload="utf8=%E2%9C%93&_method=put&authenticity_token=$authenticity_token&submission%5Bstate%5D=$old_state&submission%5Bstate%5D=$new_state"
+    _log_info "Transitioning '$talk_name' with auth token '$authenticity_token' from '$old_state' to '$new_state' (this might take a while)"
+    _post "$talk_path" "$payload" "$authenticity_token"
+  done <<< "$matching_talks"
+}
+
 export USAGE_TEXT=$(cat <<-USAGE
 PAPERCALL_SESSION_COOKIE_FILE=\$file $(basename $0) [options]
 Changes the state of one or more Papercall talks
