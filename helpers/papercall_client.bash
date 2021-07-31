@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+# download_talks_from_event_id: Downloads talks in JSON or CSV format using
+# the download link provided by PaperCall.
+download_talks_from_event_id() {
+  event_id="$1"
+  file_name="$2"
+  format="$3"
+  if grep -Eiq "^csv$" <<< "$format"
+  then
+    _request "$(get_cfp_link_from_event_id "$event_id")/download.csv" "$file_name" || return 1
+  else
+    _request "$(get_cfp_link_from_event_id "$event_id")/download" "$file_name" || return 1
+  fi
+}
+
 # get_cfp_link_from_event_id: Generates the link to the set of CFPs for an event.
 get_cfp_link_from_event_id() {
   _log_debug "Getting CFP link for event id $1"

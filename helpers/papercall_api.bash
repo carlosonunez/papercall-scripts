@@ -27,8 +27,14 @@ _post() {
 
 _request() {
   path=$(sed 's#^/##' <<< $1)
+  filename="$2"
   url="https://www.papercall.io/$path"
-  command="curl --user-agent '$USER_AGENT' -s -H 'Cookie: $(cat $PAPERCALL_SESSION_COOKIE_FILE)' '$url'"
+  if test -z "$filename"
+  then
+    command="curl --user-agent '$USER_AGENT' -s -H 'Cookie: $(cat $PAPERCALL_SESSION_COOKIE_FILE)' '$url'"
+  else
+    command="curl -o $filename --user-agent '$USER_AGENT' -s -H 'Cookie: $(cat $PAPERCALL_SESSION_COOKIE_FILE)' '$url'"
+  fi
   command_hash=$(md5sum <<< $command | head -c 10)
   _log_debug "Executing PaperCall request $command_hash: $command"
   start_time=$(date +%s)
