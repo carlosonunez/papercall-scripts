@@ -14,9 +14,14 @@ change_talk_state_bulk() {
     talk_name=$(get_talk_name_from_talk "$talk")
     talk_path=$(get_talk_href_from_talk "$talk")
     authenticity_token=$(get_csrf_token_from_talk "$talk")
-    payload="utf8=%E2%9C%93&_method=put&authenticity_token=$authenticity_token&submission%5Bstate%5D=$old_state&submission%5Bstate%5D=$new_state"
-    _log_info "Transitioning '$talk_name' with auth token '$authenticity_token' from '$old_state' to '$new_state' (this might take a while)"
-    _post "$talk_path" "$payload" "$authenticity_token"
+    if test "$old_state" == "$new_state"
+    then
+      _log_info "'$talk_name' is already in state '$new_state'; moving on..."
+    else
+      payload="utf8=%E2%9C%93&_method=put&authenticity_token=$authenticity_token&submission%5Bstate%5D=$old_state&submission%5Bstate%5D=$new_state"
+      _log_info "Transitioning '$talk_name' with auth token '$authenticity_token' from '$old_state' to '$new_state' (this might take a while)"
+      _post "$talk_path" "$payload" "$authenticity_token"
+    fi
   done <<< "$matching_talks"
 }
 
@@ -37,6 +42,9 @@ OPTIONS
   --event-name [NAME]                 The name of the event in which the talks are located.
   --talks [TALK_1,TALK_2,...]         The names of the talks to be transitioned.
   --state [Submitted, Rejected, ...]  The new state of the talks.
+  --ignore-no-matches                 Change talk states even if some talks weren\'t found
+                                      in PaperCall.
+                                      (Default: false)
 
 NOTES
 
@@ -63,6 +71,7 @@ fi
 event_name=""
 talks_psv=""
 new_state=""
+ignore_no_matches="false"
 
 while test "$#" -gt 0
 do
@@ -78,6 +87,15 @@ do
     --state)
       shift
       ! _next_arg_is_arg "$1" && { new_state="$1"; shift; }
+      ;;
+    --ignore-no-matches)
+      shift
+      if ! _next_arg_is_arg "$1" && test "$#" -ne 0
+      then
+        _fail "--ignore-no-matches doesn't take a value."
+        exit 1
+      fi
+      ignore_no_matches="true"
       ;;
     *)
       usage
@@ -103,6 +121,14 @@ talks_data=$(get_matching_talks "$event_id" "$talks_psv")
 _log_info "$(wc -l <<< "$talks_data") talks found."
 matches=$(grep -v "nomatch" <<< "$talks_data")
 non_matches=$(grep "nomatch" <<< "$talks_data")
-test -z "$non_matches" || _fail "Some talks weren't found in your search: $non_matches"
+if ! test -z "$non_matches"
+then
+  _log_warn "Some talks weren't found in your search: $non_matches"
+  if test "$ignore_no_matches" == "false"
+  then
+    _fail "Stopping since some talks weren't found. \
+Run this script again with --ignore-no-match to ignore this."
+  fi
+fi
 
 change_talk_state_bulk "$matches" "$new_state"
